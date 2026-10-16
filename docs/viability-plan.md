@@ -31,7 +31,31 @@ Source: the "long term viability" thread in the DiceCloud Discord architecture c
 - Older: `zod-schemas` (2025-01, 3 commits), `vite` (2023, Vue 3 attempt).
 - Any engine PR against `develop` will conflict with DC-16. Which base to use is the first thing to ask.
 
-## PR sequence
+### What DC-16 already changed that matters here
+
+- Variables are off Mongo. Server `CreatureVariables` collection deleted, `writeScope.js` is now a stub: `// TODO write scope to loaded creature`. This is the plan's step 4 started for variables.
+- That work is unfinished. The client reads `CreatureVariables` (`app/imports/client/localCollections/CreatureVariables.ts`, a `new Mongo.Collection(null)`) in 8 components, but nothing fills it, and a null collection can't receive a publication. `LoadedCreature.variablesObserver` is declared but never assigned, so the `variablesObserver.stop()` call in `loadCreatures.ts` should throw when a creature unloads.
+- `singleCharacter.ts` is a plain async publication returning cursors. `peerlibrary:reactive-publish` is gone.
+- Engine is async (`await buildCreatureComputation`). REST uses `simple:json-routes`. `percolate:migrations`, `meteortesting:mocha`, `aldeed:collection2`, `mdg:validated-method` kept.
+- Still the same as `develop`: `parseNode`/`hash` stored per calculation, same parse skip, computed prop fields written back by `writeAlteredProperties.js`.
+
+## PR sequence if based on DC-16 (preferred)
+
+PRs target `upstream/DC-16-migrate-to-meteor-3`. Branch each one off it in the fork and rebase often, it moves.
+
+- [ ] **0. Run it.** Install Meteor 3.4.1-rc, boot the app, run `npm test`. Write down what's broken. Don't fix unrelated things, just report the list to the maintainer.
+- [ ] **1. Parity snapshots.** Same fixtures run through the engine on `develop` and on DC-16, snapshots compared. Tests only. Proves the migration didn't change any computed values, which is useful to him on its own, and gates every later PR. Includes a local benchmark.
+- [ ] **2. Finish variables off Mongo.** Fill his `writeScope` TODO: keep scope on `LoadedCreature.variables`, publish it to the client through a named client collection with `this.added`/`changed`, fix the `variablesObserver` crash. Check the REST endpoint still gets variables. Only with his OK, he may be mid-way. This becomes the pattern for step 5.
+- [ ] **3. Shared parse memo.** Size capped `Map<hash, ParseNode>` on the existing `cyrb53` hash. Before step 4.
+- [ ] **4. Stop persisting `parseNode` and `hash`.** Memory only, plus a `percolate:migrations` migration to unset them.
+- [ ] **5. Computed prop fields from memory.** Same pattern as step 2 applied to `CreatureProperties`: Mongo keeps only the fields needed to compute, `singleCharacter` and REST serve computed props from `LoadedCreature`. Agree on approach first.
+- [ ] **6. Redis.** Only if prod needs several instances.
+
+Not ours on this base: the Meteor 3 upgrade, package replacements, Vue/Vuetify 3. He's doing those.
+
+Later, if wanted: incremental recompute, engine in `worker_threads`.
+
+## PR sequence if based on `develop`
 
 Each PR is small, one concern, and has to leave computed output identical.
 
@@ -59,4 +83,5 @@ Later, if wanted: incremental recompute (only dependents of the dirty node), eng
 
 ## Log
 
+- 2026-10-17: Reviewed DC-16. Variables already moved off Mongo but unfinished (stub `writeScope`, client collection never filled, `variablesObserver` never assigned). Added DC-16 plan. Meteor isn't installed locally yet.
 - 2026-10-17: Forked to `Lithial/DiceCloud`. Remotes: `origin` = fork, `upstream` = ThaumRystra. Found DC-16. Corrected the parse cache finding (it exists, stored in Mongo).
