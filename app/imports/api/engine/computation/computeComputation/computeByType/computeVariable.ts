@@ -15,6 +15,8 @@ export default function computeVariable(computation: CreatureComputation, node: 
   // Don't add to the scope if the node id is not a legitimate variable name
   // Without this `some.thing` could break the entire sheet as a database key
   if (typeof node.id === 'number' || !VARIABLE_NAME_REGEX.test(node.id)) return;
+  // ngraph's addLink creates nodes with no data for variables that are referenced but never defined
+  if (!node.data) node.data = {} as any;
   aggregateLinks(computation, node);
   combineAggregations(computation, node);
   if (node.data.definingProp) {
@@ -30,6 +32,7 @@ function aggregateLinks(computation: CreatureComputation, node: TraversedNode) {
   computation.dependencyGraph.forEachLinkedNode(
     node.id,
     (linkedNode, link) => {
+      if (!linkedNode.data) linkedNode.data = {} as any;
       // Ignore inactive props
       if ('inactive' in linkedNode.data && linkedNode.data.inactive) return;
       // Ignore point buy rows if their base table is inactive

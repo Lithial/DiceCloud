@@ -5,7 +5,7 @@ import type { ParseNodeFactory } from '/imports/parser/types/ParseNodeFactory';
 import type { ResolvedResult } from '/imports/parser/types/ResolvedResult';
 import type { ResolveLevelFunction } from '/imports/parser/types/ResolveLevelFunction';
 
-const getFromScope = (await import('../../api/engine/shared/scope')).getFromScope;
+import { getFromScope } from '/imports/api/engine/shared/scope';
 
 export type AccessorNode = {
   parseType: 'accessor' | 'symbol';

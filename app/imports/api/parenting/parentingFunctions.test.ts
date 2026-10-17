@@ -112,16 +112,16 @@ describe('Document tree filters can fetch other documents based on their positio
    *            6 MongoDB 7       8 dbm 9
    */
   const treeCollection: Mongo.Collection<TreeDoc> = new Mongo.Collection('treeDocs');
-  treeCollection.remove({});
-  [
+  before(async function () {
+    await treeCollection.removeAsync({});
+    await Promise.all([
     doc('Books', 1, 12, undefined),
     doc('Programming', 2, 11, 'Books'),
     doc('Languages', 3, 4, 'Programming'),
     doc('Databases', 5, 10, 'Programming'),
     doc('MongoDB', 6, 7, 'Databases'),
     doc('dbm', 8, 9, 'Databases'),
-  ].map(doc => {
-    return treeCollection.insert(doc);
+  ].map(doc => treeCollection.insertAsync(doc)));
   });
   const docs: TreeDoc[] = treeCollection.find({}).fetch();
 
