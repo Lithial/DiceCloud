@@ -75,6 +75,26 @@ Later, if wanted: incremental recompute (only dependents of the dirty node), eng
 3. Does anything outside this repo read computed fields from Mongo (Discord bot, v1, analytics)?
 4. How many app instances does prod run?
 
+## DC-16 test run (step 0)
+
+Why tests don't run as shipped:
+- Collection2 isn't loaded in test mode. `server/main.js` imports `meteor/aldeed:collection2/static`, but `meteor test` skips the main module, so `EngineActions.attachSchema is not a function`.
+- Most test files are async modules (top-level await somewhere in their imports) and finish loading after mocha has started, so they register nothing. There's no error, just a short run.
+- `imports/parser/parseTree/accessor.ts:8` `const getFromScope = (await import('../../api/engine/shared/scope')).getFromScope;` deadlocks module loading (circular import through `loadCreatures`). Replacing it with a static import fixes it.
+
+Local patches used to get a full run (not committed):
+- `package.json` `meteor.testModule = tests/main.js`. That file imports collection2, holds `mochaInstance.run` until every `*.test.*` import resolves, and turns failed imports into failing tests.
+- `accessor.ts` static import, as above.
+- `computeVariable.ts`: restored `develop`'s `if (!node.data) node.data = {}` guards for the node and the linked node. Without them `aggregateClassLevel` throws `Cannot read properties of undefined (reading 'inactive')`, an unhandled rejection that kills the test process.
+
+The 26 failures:
+- 14 × `Cannot read properties of undefined (reading 'stop')` at `loadCreatures.ts:328` `this.variablesObserver.stop()` from `unloadAllCreatures` in `actionEngineTest.testFn.ts`. This is the predicted `variablesObserver` bug.
+- 4 × action targeting results differ (`expected [ { targetIds… } ] to deeply equal …`), 1 × `Target property is required [not-found]`, 1 × `applyTask is not a function` (circular import, rspack warns about `applyTask.ts`).
+- `computeCreatureComputation.test.ts`: inline calculation not substituted (`'test description inlineRef * 2…'`), constant computes to `NaN` instead of 6.
+- `parentingFunctions.test.ts`: `remove is not available on the server. Please use removeAsync()`. Throws at load, which leaves mocha's suite stack open, so the later accessor/call tests show up nested under "Document tree filters". Their own failure: `context.errors` not empty when compiling a known variable.
+
+Not yet compared with `develop` (needs Meteor 2.16 / Node 14), so some failures may predate DC-16.
+
 ## Constraints
 
 - CLA via cla-assistant. Commit as `lithial`, no AI co-author trailers. PR #399 failed the CLA because `claude` was a committer.
@@ -83,5 +103,6 @@ Later, if wanted: incremental recompute (only dependents of the dirty node), eng
 
 ## Log
 
+- 2026-10-17: Step 0 on DC-16 @ 05c522cd (worktree `../DiceCloud-dc16`, Meteor 3.4.1-rc.0, Node 22.22.1). `meteor npm install` OK. Typecheck: 1596 errors (679 in `api/engine`), mostly implicit any and missing types, not blocking. Out of the box `meteor test` runs 10 of 36 test files; the rest never register. After local patches: 53 passing, 26 failing. Details in "DC-16 test run" below.
 - 2026-10-17: Reviewed DC-16. Variables already moved off Mongo but unfinished (stub `writeScope`, client collection never filled, `variablesObserver` never assigned). Added DC-16 plan. Meteor isn't installed locally yet.
 - 2026-10-17: Forked to `Lithial/DiceCloud`. Remotes: `origin` = fork, `upstream` = ThaumRystra. Found DC-16. Corrected the parse cache finding (it exists, stored in Mongo).
